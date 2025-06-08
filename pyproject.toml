@@ -1,0 +1,87 @@
+[project]
+name = "video-use"
+version = "0.1.0"
+description = "Convert videos to browser-use prompts/workflows by analyzing recorded browser interactions"
+authors = [
+    {name = "Video Use Team", email = "team@video-use.com"},
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    # Core browser automation
+    "browser-use>=0.2.5",
+    "faiss-cpu==1.10.0",
+    
+    # API server
+    "fastapi>=0.115.12",
+    "uvicorn>=0.30.0",
+    
+    # CLI framework
+    "typer>=0.15.3",
+    
+    # LLM integration
+    "langchain-openai>=0.2.0",
+    "openai>=1.0.0",
+    
+    # Data validation
+    "pydantic>=2.0.0",
+    
+    # Video processing
+    "opencv-python>=4.8.0",
+    "ffmpeg-python>=0.2.0",
+    
+    # Computer vision
+    "ultralytics>=8.0.0",
+    "mediapipe>=0.10.0",
+    
+    # OCR
+    "pytesseract>=0.3.10",
+    "easyocr>=1.7.0",
+    
+    # Image processing
+    "pillow>=10.0.0",
+    "scikit-image>=0.21.0",
+    "numpy>=1.24.0",
+    
+    # AI/ML
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "transformers>=4.30.0",
+    
+    # Async support
+    "aiofiles>=23.0.0",
+    "asyncio>=3.4.3",
+    
+    # Utilities
+    "python-multipart>=0.0.6",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+
+[project.scripts]
+video-use = "video_use.cli:app"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true 
