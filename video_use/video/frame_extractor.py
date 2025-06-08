@@ -61,12 +61,12 @@ class FrameExtractor:
         try:
             metadata = await self.extract_video_metadata(video_path)
             
-            # Calculate frame extraction parameters
-            frame_interval = max(1, int(metadata.fps / self.config.frame_extraction_fps))
+            # Use fixed interval of every 15th frame
+            frame_interval = 15
             max_frames = min(self.config.max_frames, metadata.total_frames // frame_interval)
             
             logger.info(f"Extracting {max_frames} frames from {video_path}")
-            logger.info(f"Frame interval: {frame_interval}, FPS: {metadata.fps}")
+            logger.info(f"Frame interval: {frame_interval} (every 15th frame), FPS: {metadata.fps}")
             
             # Extract frames in a separate thread to avoid blocking
             loop = asyncio.get_event_loop()
@@ -78,12 +78,7 @@ class FrameExtractor:
                 max_frames
             )
             
-            # Filter frames based on visual differences
-            if self.config.min_frame_difference > 0:
-                original_count = len(frames)
-                frames = await self._filter_frames_by_difference(frames)
-                logger.info(f"Frame filtering: {original_count} -> {len(frames)} frames (threshold: {self.config.min_frame_difference})")
-            
+            # No frame filtering - keep all selected frames for LLM analysis
             logger.info(f"Successfully extracted {len(frames)} frames")
             return frames
             

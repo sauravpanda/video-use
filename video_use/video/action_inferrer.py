@@ -1,8 +1,12 @@
 """Action inference from UI element changes and frame analysis."""
 
+import asyncio
 import logging
 from typing import List, Dict, Optional
 import numpy as np
+import base64
+import io
+from PIL import Image
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -40,35 +44,32 @@ class ActionInferrer:
             return ChatOpenAI(model="gpt-4o", temperature=0.1)
         
     async def infer_actions(self, frames: List[Frame], ui_elements_by_frame: Dict[int, List[UIElement]]) -> List[Action]:
-        """Infer user actions from frame sequence and UI elements."""
+        """Infer user actions from frame sequence using sequential LLM analysis."""
         try:
             actions = []
+            previous_steps = []
             
-            # Analyze frame pairs for actions
-            for i in range(len(frames) - 1):
-                current_frame = frames[i]
-                next_frame = frames[i + 1]
+            # Analyze each frame sequentially with LLM
+            for i, frame in enumerate(frames):
+                logger.info(f"Analyzing frame {i+1}/{len(frames)} with LLM")
                 
-                current_elements = ui_elements_by_frame.get(current_frame.frame_number, [])
-                next_elements = ui_elements_by_frame.get(next_frame.frame_number, [])
+                # Get UI elements for this frame
+                ui_elements = ui_elements_by_frame.get(frame.frame_number, [])
                 
-                # Infer actions between these frames
-                frame_actions = await self._infer_actions_between_frames(
-                    current_frame, next_frame, current_elements, next_elements
-                )
-                actions.extend(frame_actions)
+                # Analyze frame with LLM and get the action/step
+                step_description = await self._analyze_frame_with_llm(frame, ui_elements, previous_steps)
+                
+                if step_description:
+                    # Create action based on LLM analysis
+                    action = self._create_action_from_llm_analysis(frame, step_description, i)
+                    if action:
+                        actions.append(action)
+                        previous_steps.append(step_description)
+                
+                # Add small delay to avoid rate limiting
+                await asyncio.sleep(0.1)
             
-            # Post-process and clean up actions
-            actions = self._post_process_actions(actions)
-            
-            # Use LLM to enhance action descriptions if available
-            if self.config.generate_descriptions and (
-                (self.use_langchain and self.llm) or 
-                (not self.use_langchain and self.client)
-            ):
-                actions = await self._enhance_actions_with_llm(actions, frames)
-            
-            logger.info(f"Inferred {len(actions)} actions from {len(frames)} frames")
+            logger.info(f"Inferred {len(actions)} actions from {len(frames)} frames using LLM analysis")
             return actions
             
         except Exception as e:
@@ -522,4 +523,115 @@ class ActionInferrer:
         
         # Fallback: return original response split by lines
         lines = [line.strip() for line in response.split('\n') if line.strip()]
-        return lines[:10]  # Limit to reasonable number 
+        return lines[:10]  # Limit to reasonable number
+    
+    async def _analyze_frame_with_llm(self, frame: Frame, ui_elements: List[UIElement], previous_steps: List[str]) -> Optional[str]:
+        """Analyze a single frame with LLM to understand what action is happening."""
+        try:
+            if not self.llm:
+                return None
+            
+            # Convert frame image to base64 for LLM
+            image_base64 = self._frame_to_base64(frame)
+            
+            # Build context from previous steps
+            context = ""
+            if previous_steps:
+                context = "Previous steps identified:\n" + "\n".join([f"{i+1}. {step}" for i, step in enumerate(previous_steps[-5:])]) + "\n\n"
+            
+            # Build UI elements context
+            ui_context = ""
+            if ui_elements:
+                ui_context = "UI elements detected in this frame:\n"
+                for element in ui_elements[:10]:  # Limit to first 10 elements
+                    ui_context += f"- {element.element_type.value}: {element.text or 'no text'} at {element.bbox}\n"
+                ui_context += "\n"
+            
+            # Create system message
+            system_message = SystemMessage(content="""You are analyzing a video frame to identify what user action is happening. 
+Based on the screenshot and detected UI elements, describe the specific action the user is taking in this frame.
+
+Focus on:
+- What button/element is being clicked
+- What text is being typed
+- What navigation is happening
+- What the user is trying to accomplish
+
+Be specific and concise. If no clear action is visible, respond with "No action detected".""")
+            
+            # Create human message with image
+            human_content = f"""{context}{ui_context}What action is the user taking in this frame? Be specific about what element they are interacting with and what they are trying to accomplish."""
+            
+            # Send to LLM
+            messages = [
+                system_message,
+                HumanMessage(content=[
+                    {"type": "text", "text": human_content},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}}
+                ])
+            ]
+            
+            response = await self.llm.ainvoke(messages)
+            step_description = response.content.strip()
+            
+            if step_description and step_description.lower() != "no action detected":
+                return step_description
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error analyzing frame with LLM: {e}")
+            return None
+    
+    def _frame_to_base64(self, frame: Frame) -> str:
+        """Convert frame image to base64 string."""
+        try:
+            # Convert numpy array to PIL Image
+            if isinstance(frame.image, np.ndarray):
+                image = Image.fromarray(frame.image)
+            else:
+                image = frame.image
+            
+            # Save to bytes
+            buffer = io.BytesIO()
+            image.save(buffer, format='PNG')
+            image_bytes = buffer.getvalue()
+            
+            # Encode to base64
+            return base64.b64encode(image_bytes).decode('utf-8')
+            
+        except Exception as e:
+            logger.error(f"Error converting frame to base64: {e}")
+            return ""
+    
+    def _create_action_from_llm_analysis(self, frame: Frame, step_description: str, step_index: int) -> Optional[Action]:
+        """Create an Action object from LLM analysis description."""
+        try:
+            # Determine action type based on description keywords
+            description_lower = step_description.lower()
+            
+            action_type = ActionType.CLICK  # Default
+            if any(word in description_lower for word in ['type', 'typing', 'enter', 'input']):
+                action_type = ActionType.TYPE
+            elif any(word in description_lower for word in ['scroll', 'scrolling']):
+                action_type = ActionType.SCROLL
+            elif any(word in description_lower for word in ['navigate', 'go to', 'visit']):
+                action_type = ActionType.NAVIGATE
+            elif any(word in description_lower for word in ['wait', 'waiting', 'loading']):
+                action_type = ActionType.WAIT
+            
+            # Create action
+            action = Action(
+                action_type=action_type,
+                start_frame=frame.frame_number,
+                end_frame=frame.frame_number,
+                timestamp=frame.timestamp,
+                confidence=0.8,  # High confidence since LLM analyzed it
+                description=step_description
+            )
+            
+            return action
+            
+        except Exception as e:
+            logger.error(f"Error creating action from LLM analysis: {e}")
+            return None 
