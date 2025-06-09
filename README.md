@@ -7,9 +7,9 @@ Video-Use analyzes screen recordings of browser interactions and automatically g
 ## 🎯 What it does
 
 1. **Extracts frames** from your browser interaction videos
-2. **Detects UI elements** (buttons, inputs, links) using computer vision and OCR
-3. **Infers user actions** (clicks, typing, navigation) from visual changes between frames
-4. **Generates workflows** that can be executed with browser-use automation
+2. **Analyzes user interactions** using AI (Gemini) to understand step-by-step actions
+3. **Generates structured workflows** that can be executed with browser-use automation
+4. **Provides both frame-based and AI-powered analysis** for different use cases
 
 ## 🚀 Quick Start
 
@@ -17,7 +17,7 @@ Video-Use analyzes screen recordings of browser interactions and automatically g
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/video-use.git
+git clone https://github.com/sauravpanda/video-use.git
 cd video-use
 
 # Install dependencies
@@ -26,135 +26,153 @@ pip install -e .
 
 ### Basic Usage
 
-```bash
-# Analyze a video file
-video-use analyze recording.mp4 --output ./results
-
-# Quick analysis (keyframes only)
-video-use analyze recording.mp4 --quick
-
-# Export workflow for browser-use
-video-use export abc123 --format browser-use --output workflow.json
-```
-
-### Python API
+#### Python API
 
 ```python
-from video_use import VideoService
+from video_use import VideoUseService, VideoAnalysisConfig
 from pathlib import Path
+import asyncio
 
-# Initialize service
-service = VideoService()
+async def main():
+    # Initialize service
+    config = VideoAnalysisConfig(
+        frame_extraction_fps=1.0,
+        max_frames=20
+    )
+    service = VideoUseService(config)
+    
+    # For Gemini AI analysis (requires GOOGLE_API_KEY)
+    result = await service.analyze_video_file(
+        Path("recording.mp4"),
+        use_gemini=True
+    )
+    
+    if result.success:
+        # Generate structured workflow
+        workflow = await service.generate_structured_workflow_from_gemini(
+            result.workflow_steps[0]['analysis_text'],
+            start_url="https://example.com"
+        )
+        print(f"Generated workflow: {workflow.prompt}")
 
-# Analyze video
-result = await service.analyze_video_file(Path("recording.mp4"))
+asyncio.run(main())
+```
 
-# Export to browser-use format
-workflow = await service.export_workflow_to_browser_use(result.analysis_id)
+#### Running Examples
+
+```bash
+# Basic frame extraction
+cd examples
+python simple_example.py sample_form_filling.mp4
+
+# Frame extraction with more detail
+cd examples/frame-extraction
+python example_frame_extraction.py ../sample_form_filling.mp4 --mode frames
+
+# AI analysis (requires GOOGLE_API_KEY environment variable)
+export GOOGLE_API_KEY="your-gemini-api-key"
+python example_frame_extraction.py ../sample_form_filling.mp4 --mode gemini
 ```
 
 ## 📋 Features
 
 ### Core Capabilities
-- **Multi-format support**: MP4, AVI, MOV, MKV, WebM, FLV, WMV
+- **Multi-format support**: MP4, AVI, MOV, MKV, WebM support for video input
 - **Intelligent frame extraction**: Adaptive sampling based on visual changes
-- **Computer vision**: Detects buttons, inputs, links, and other UI elements
-- **OCR integration**: Extracts text from UI elements using Tesseract and EasyOCR
-- **Action inference**: Identifies clicks, typing, scrolling, and navigation
-- **LLM enhancement**: Uses GPT models to improve action descriptions
-- **Browser-use compatibility**: Direct export to executable workflows
+- **AI-powered analysis**: Uses Google Gemini for understanding user interactions
+- **Structured workflow generation**: Converts analysis into browser-use compatible formats
+- **Frame-based analysis**: Traditional computer vision approach for detailed frame inspection
+- **Flexible configuration**: Customizable analysis parameters
 
 ### Analysis Features
-- **Parallel processing**: Multi-threaded analysis for better performance
-- **Confidence scoring**: Quality metrics for each detected action
-- **Visual change detection**: Smart frame filtering to reduce processing
-- **Keyframe analysis**: Quick analysis mode for faster results
-- **Custom configuration**: Adjustable parameters for different use cases
+- **Gemini AI integration**: Advanced natural language understanding of user actions
+- **Frame extraction service**: Smart sampling to identify key interaction moments
+- **Asynchronous processing**: Non-blocking analysis for better performance
+- **Multiple analysis modes**: Choose between AI analysis or traditional frame processing
+- **Workflow export**: Generate structured outputs compatible with browser automation
 
 ## 🛠️ Configuration
 
-### Default Settings
+### Analysis Configuration
 
 ```python
 from video_use import VideoAnalysisConfig
 
 config = VideoAnalysisConfig(
+    # Frame extraction settings
     frame_extraction_fps=1.0,           # Extract 1 frame per second
-    ui_detection_confidence=0.7,        # UI element confidence threshold
-    action_confidence_threshold=0.8,    # Action inference threshold
-    enable_ocr=True,                    # Enable text extraction
-    llm_model="gpt-4o",                # Model for action enhancement
-    max_frames=1000,                    # Maximum frames to process
-    parallel_processing=True,           # Enable parallel processing
-    max_workers=4                       # Number of worker threads
+    min_frame_difference=0.02,           # Minimum difference to consider frames different
+    max_frames=1000,                     # Maximum frames to process
+    
+    # AI analysis settings
+    llm_model="gemini-1.5-pro",        # Gemini model for analysis
+    
+    # Performance settings
+    parallel_processing=True,            # Enable parallel processing
+    max_workers=4,                      # Number of worker threads
+    enable_caching=True                 # Enable result caching
 )
 ```
 
-### CLI Configuration
+### Environment Variables
 
 ```bash
-# Show current configuration
-video-use config --show
+# Required for Gemini AI analysis
+export GOOGLE_API_KEY="your-gemini-api-key"
 
-# Analyze with custom settings
-video-use analyze video.mp4 --fps 2.0 --confidence 0.8
-
-# Quick analysis
-video-use analyze video.mp4 --quick
+# Optional: specify API endpoint
+export GOOGLE_API_BASE="https://generativelanguage.googleapis.com"
 ```
 
 ## 📊 Example Output
 
-### Workflow Steps
-```json
-{
-  "name": "Form Filling Workflow",
-  "description": "Workflow with 5 steps including 2 click actions, 2 type actions, 1 navigate action. Duration: 12.3 seconds.",
-  "steps": [
-    {
-      "step_id": "step_1",
-      "action_type": "click",
-      "description": "Click on login button",
-      "timestamp": 2.1,
-      "confidence": 0.92,
-      "target_element": {
-        "type": "button",
-        "text": "Login",
-        "bbox": [150, 200, 80, 35]
-      }
-    },
-    {
-      "step_id": "step_2",
-      "action_type": "type",
-      "description": "Type email address",
-      "value": "user@example.com",
-      "timestamp": 3.5,
-      "confidence": 0.87
-    }
-  ]
-}
+### Frame Extraction Results
+```bash
+🔍 Extracting frames from: sample_form_filling.mp4
+✅ Extracted 15 frames
+   Frame 1: #30 at 1.00s
+   Frame 2: #60 at 2.00s
+   Frame 3: #90 at 3.00s
+   Frame 4: #120 at 4.00s
+   Frame 5: #150 at 5.00s
+   ... and 10 more frames
 ```
 
-### Analysis Results
+### AI Analysis Results
 ```bash
-✓ Analysis completed successfully!
-Analysis ID: abc123-def456
-Processing time: 15.23 seconds
-Confidence score: 0.84
-Workflow steps: 8
+🤖 Analyzing video with Gemini: sample_form_filling.mp4
+✅ Analysis complete!
+============================================================
+STEP-BY-STEP USER ACTIONS:
+============================================================
 
-┏━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┓
-┃ Step ┃ Action    ┃ Description                 ┃ Confidence ┃
-┡━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━┩
-│ 1    │ navigate  │ Navigate to login page      │ 0.78       │
-│ 2    │ click     │ Click on username field     │ 0.92       │
-│ 3    │ type      │ Type username               │ 0.88       │
-│ 4    │ click     │ Click on password field     │ 0.90       │
-│ 5    │ type      │ Type password               │ 0.85       │
-│ 6    │ click     │ Click login button          │ 0.95       │
-│ 7    │ wait      │ Wait for page load          │ 0.70       │
-│ 8    │ navigate  │ Navigate to dashboard       │ 0.82       │
-└──────┴───────────┴─────────────────────────────┴────────────┘
+1. The user navigates to a login page at the beginning of the video
+2. They click on the username/email input field
+3. The user types their email address into the field
+4. Next, they click on the password input field
+5. The user enters their password
+6. Finally, they click the "Login" or "Sign In" button to submit the form
+7. The page transitions to show a successful login or dashboard
+
+This appears to be a standard login workflow with form interaction.
+```
+
+### Structured Workflow Output
+```python
+workflow = StructuredWorkflowOutput(
+    prompt="Navigate to login page, fill out username and password, then submit the form",
+    start_url="https://example.com/login",
+    parameters={
+        "username": "user@example.com",
+        "password": "[HIDDEN]",
+        "login_button_text": "Login"
+    },
+    token_usage=TokenUsage(
+        input_tokens=1250,
+        output_tokens=180,
+        total_tokens=1430
+    )
+)
 ```
 
 ## 🎥 Recording Tips
@@ -184,58 +202,51 @@ For best analysis results:
 ### Limitations
 - ❌ Very fast mouse movements
 - ❌ Drag and drop (limited support)
-- ❌ Right-click context menus
 - ❌ Keyboard shortcuts
 - ❌ Complex animations
 
-## 🔧 CLI Commands
+## 🔧 Available Examples
 
-### Analysis Commands
+### Frame Extraction Example
 ```bash
-# Basic analysis
-video-use analyze video.mp4
-
-# With custom output directory
-video-use analyze video.mp4 --output ./analysis_results
-
-# With user context
-video-use analyze video.mp4 --prompt "Login to admin dashboard"
-
-# Quick keyframe analysis
-video-use analyze video.mp4 --quick
-
-# Verbose output
-video-use analyze video.mp4 --verbose
+cd examples/frame-extraction
+python example_frame_extraction.py ../sample_form_filling.mp4 --mode frames
 ```
 
-### Export Commands
+### AI Analysis Example  
 ```bash
-# Export to browser-use format
-video-use export abc123 --format browser-use --output workflow.json
+# Set up Gemini API key
+export GOOGLE_API_KEY="your-gemini-api-key"
 
-# Export analysis as JSON
-video-use export abc123 --format json --output results.json
-
-# View workflow in terminal
-video-use export abc123 --format browser-use
+# Run AI analysis
+cd examples/frame-extraction
+python example_frame_extraction.py ../sample_form_filling.mp4 --mode gemini
 ```
 
-### Utility Commands
+### Simple Service Example
 ```bash
-# List cached analyses
-video-use list
+cd examples
+python simple_example.py sample_form_filling.mp4
+```
 
-# Show video information
-video-use info video.mp4
+### Custom Python Integration
+```python
+from video_use import VideoUseService, VideoAnalysisConfig
+from pathlib import Path
 
-# Show configuration
-video-use config --show
+# Create service with custom config
+config = VideoAnalysisConfig(
+    frame_extraction_fps=2.0,
+    max_frames=50
+)
+service = VideoUseService(config)
 
-# Clean cache
-video-use clean --yes
-
-# Show demo
-video-use demo
+# Analyze video
+result = await service.analyze_video_file(
+    Path("your_video.mp4"),
+    use_gemini=True,
+    user_prompt="Analyze this e-commerce checkout flow"
+)
 ```
 
 ## 🏗️ Architecture
@@ -245,133 +256,74 @@ video-use demo
 ```
 video-use/
 ├── video_use/
-│   ├── video/              # Video processing modules
-│   │   ├── analyzer.py     # Main video analyzer
-│   │   ├── frame_extractor.py    # Frame extraction
-│   │   ├── ui_detector.py        # UI element detection
-│   │   ├── action_inferrer.py    # Action inference
-│   │   └── ocr_service.py        # Text extraction
-│   ├── schema/             # Data models
-│   │   └── models.py       # Core data structures
-│   └── cli.py             # Command line interface
-```
-
-### Processing Pipeline
-
-```mermaid
-graph TD
-    A[Video File] --> B[Frame Extraction]
-    B --> C[UI Detection]
-    C --> D[OCR Processing]
-    D --> E[Action Inference]
-    E --> F[Workflow Generation]
-    F --> G[Browser-Use Export]
-    
-    H[Computer Vision] --> C
-    I[Machine Learning] --> E
-    J[LLM Enhancement] --> F
+│   ├── analysis/           # Analysis services
+│   │   ├── services.py     # Video analysis & Gemini services
+│   │   └── __init__.py     # Analysis module exports
+│   ├── models.py          # Core data models and configurations
+│   ├── services.py        # Main business logic services
+│   ├── prompts.py         # LLM prompts for analysis
+│   └── __init__.py        # Package exports
+├── examples/              # Usage examples
+│   ├── simple_example.py  # Basic usage demonstration
+│   ├── frame-extraction/  # Frame extraction examples
+│   └── sample_form_filling.mp4  # Demo video
+└── tests/                 # Test suite
 ```
 
 ### Data Flow
 
-1. **Video Input**: MP4, AVI, MOV, etc.
-2. **Frame Extraction**: Smart sampling based on visual changes
-3. **UI Detection**: Computer vision + OCR for element identification
-4. **Action Inference**: Temporal analysis of UI changes
-5. **Workflow Generation**: Structured output with confidence scores
-6. **Export**: Browser-use compatible format
+1. **Video Input**: MP4, AVI, MOV, MKV, WebM format support
+2. **Frame Extraction**: Intelligent sampling based on visual changes and FPS settings
+3. **Analysis Processing**: Choice between AI-powered Gemini analysis or traditional frame processing
+4. **Workflow Generation**: Convert analysis results into structured workflows
+5. **Export**: Generate browser-use compatible prompt
 
 ## 🔌 Integration with Browser-Use
 
-Video-Use generates workflows that are directly compatible with [browser-use](https://github.com/browser-use/browser-use):
+Video-Use generates structured workflows that can be integrated with [browser-use](https://github.com/browser-use/browser-use):
 
 ```python
-# Generated by video-use
-workflow = {
-    "name": "Login Workflow", 
-    "steps": [
-        {
-            "type": "click",
-            "selector": "text=Login",
-            "description": "Click login button"
-        },
-        {
-            "type": "type", 
-            "selector": "input[type=email]",
-            "text": "user@example.com",
-            "description": "Enter email"
-        }
-    ]
-}
-
-# Execute with browser-use
+from video_use import VideoUseService
 from browser_use import Agent
 
-agent = Agent()
-await agent.execute_workflow(workflow)
+# 1. Analyze video to get workflow description
+service = VideoUseService()
+result = await service.analyze_video_file(
+    Path("login_demo.mp4"),
+    use_gemini=True
+)
+
+# 2. Generate structured workflow
+if result.success:
+    workflow = await service.generate_structured_workflow_from_gemini(
+        result.workflow_steps[0]['analysis_text'],
+        start_url="https://example.com/login"
+    )
+    
+    # 3. Use the workflow prompt with browser-use Agent
+    agent = Agent()
+    await agent.run(workflow.prompt)
+    
+    # The workflow will contain:
+    # - Natural language description of actions
+    # - Start URL for the automation
+    # - Extracted parameters and values
+    print(f"Workflow: {workflow.prompt}")
+    print(f"Start URL: {workflow.start_url}")
+    print(f"Parameters: {workflow.parameters}")
 ```
 
 ## 🤖 AI Models
 
+### Primary AI Engine
+- **Google Gemini 1.5 Pro**: Advanced multimodal AI for video understanding and action analysis
+- **Frame processing**: Intelligent sampling and visual change detection using OpenCV
+- **Natural language processing**: Converts video analysis into human-readable workflow descriptions
+
 ### Computer Vision
-- **YOLO**: Object detection for UI elements
-- **OpenCV**: Image processing and contour detection
-- **MediaPipe**: Enhanced UI component recognition
+- **OpenCV**: Video processing, frame extraction, and visual change detection
+- **Frame analysis**: Smart sampling based on visual differences and configured FPS
 
-### OCR Engines
-- **Tesseract**: Primary OCR engine for text extraction
-- **EasyOCR**: Fallback OCR with better accuracy for complex text
-
-### Language Models
-- **GPT-4**: Action description enhancement and workflow optimization
-- **Custom prompts**: Context-aware action interpretation
-
-## ⚙️ Advanced Configuration
-
-### Custom Analysis Pipeline
-
-```python
-from video_use import VideoAnalyzer, VideoAnalysisConfig
-
-# Create custom configuration
-config = VideoAnalysisConfig(
-    frame_extraction_fps=2.0,      # Higher sampling rate
-    ui_detection_confidence=0.8,   # Stricter UI detection
-    enable_ocr=True,               # Enable text extraction
-    llm_model="gpt-4o",           # Use latest model
-    parallel_processing=True,       # Enable parallel processing
-    max_workers=8                  # More worker threads
-)
-
-# Initialize analyzer
-analyzer = VideoAnalyzer(config)
-
-# Analyze with custom config
-result = await analyzer.analyze_video(video_path)
-```
-
-### Performance Tuning
-
-```python
-# For speed (lower quality)
-fast_config = VideoAnalysisConfig(
-    frame_extraction_fps=0.5,     # Fewer frames
-    ui_detection_confidence=0.6,  # Lower threshold
-    enable_ocr=False,             # Disable OCR
-    parallel_processing=True,      # Keep parallel processing
-    max_frames=500                # Limit total frames
-)
-
-# For accuracy (slower)
-accurate_config = VideoAnalysisConfig(
-    frame_extraction_fps=2.0,     # More frames
-    ui_detection_confidence=0.9,  # Higher threshold  
-    enable_ocr=True,              # Enable OCR
-    llm_model="gpt-4o",          # Use best model
-    generate_descriptions=True,    # Enhanced descriptions
-    include_validation_rules=True # Add validation
-)
-```
 
 ## 🧪 Development
 
@@ -389,83 +341,24 @@ source venv/bin/activate  # or `venv\Scripts\activate` on Windows
 # Install in development mode
 pip install -e ".[dev]"
 
-# Install pre-commit hooks
-pre-commit install
 ```
 
-### Running Tests
+## 🚧 Roadmap
 
-```bash
-# Run all tests
-pytest
+### High Priority
+- **End-to-end testing integration**: Implement automated testing where Browser Use Agent executes the generated workflows to validate accuracy
+- **Parameterized workflow execution**: Support dynamic values in workflows (e.g., CSV data input for batch form filling)
+- **Workflow validation**: Add validation checks to ensure generated prompts produce expected results
 
-# Run with coverage
-pytest --cov=video_use
+### Medium Priority  
+- **Enhanced error handling**: Better error messages and recovery strategies for failed video analysis
+- **Performance optimization**: Optimize frame extraction and analysis for longer videos with image based models.
 
-# Run specific test file
-pytest tests/test_analyzer.py
-
-# Run with verbose output
-pytest -v
-```
-
-### Code Quality
-
-```bash
-# Format code
-black video_use/
-
-# Lint code
-ruff video_use/
-
-# Type checking
-mypy video_use/
-```
-
-## 📈 Performance
-
-### Benchmarks
-
-| Video Length | Frames | Processing Time | Actions Detected | Accuracy |
-|-------------|---------|----------------|------------------|----------|
-| 30 seconds  | 30      | 15s            | 5               | 92%      |
-| 1 minute    | 60      | 28s            | 12              | 89%      |
-| 2 minutes   | 120     | 52s            | 25              | 87%      |
-| 5 minutes   | 300     | 2m 15s         | 48              | 85%      |
-
-*Results on Intel i7, 16GB RAM, processing 1080p videos*
-
-### Optimization Tips
-
-- Use `--quick` mode for faster analysis
-- Reduce `frame_extraction_fps` for longer videos
-- Disable OCR if text detection isn't needed
-- Use parallel processing for better performance
-- Limit `max_frames` for very long videos
-
-## 🤝 Contributing
-
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-### Areas for Contribution
-
-- **New UI element detectors**: Add support for more UI components
-- **Better action inference**: Improve accuracy of action detection
-- **Performance optimization**: Speed up processing pipeline
-- **Additional export formats**: Support for other automation frameworks
-- **Documentation**: Improve guides and examples
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
 - [browser-use](https://github.com/browser-use/browser-use) - Browser automation framework
 - [OpenCV](https://opencv.org/) - Computer vision library
-- [Ultralytics YOLO](https://github.com/ultralytics/ultralytics) - Object detection
-- [Tesseract](https://github.com/tesseract-ocr/tesseract) - OCR engine
-- [EasyOCR](https://github.com/JaidedAI/EasyOCR) - OCR engine
 
 ---
 
