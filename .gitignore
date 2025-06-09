@@ -195,3 +195,5 @@ cython_debug/
 
 *.pt
 uv.lock
+*.mp4
+logs.txt

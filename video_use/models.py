@@ -115,6 +115,62 @@ class WorkflowDefinition:
 
 
 @dataclass
+class VideoAnalysisConfig:
+    """Configuration for video analysis."""
+    # Frame extraction
+    frame_extraction_fps: float = 1.0
+    min_frame_difference: float = 0.02
+    max_frames: int = 1000
+    
+    # UI detection
+    ui_detection_confidence: float = 0.7
+    ocr_languages: List[str] = field(default_factory=lambda: ['en'])
+    enable_ocr: bool = True
+    
+    # Action inference
+    action_confidence_threshold: float = 0.6
+    temporal_smoothing_window: int = 3
+    enable_action_grouping: bool = True
+    
+    # Workflow generation
+    llm_model: str = "gemini-1.5-pro"
+    max_workflow_steps: int = 50
+    generate_descriptions: bool = True
+    include_validation_rules: bool = True
+    
+    # Performance
+    parallel_processing: bool = True
+    max_workers: int = 4
+    enable_caching: bool = True
+    cache_dir: Optional[Path] = None
+
+
+class TokenUsage(BaseModel):
+    """Token usage tracking for LLM calls."""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+    model_name: str = ""
+    call_count: int = 0
+    
+    def add_usage(self, input_tokens: int, output_tokens: int, model_name: str = ""):
+        """Add token usage from a single LLM call."""
+        self.input_tokens += input_tokens
+        self.output_tokens += output_tokens
+        self.total_tokens += (input_tokens + output_tokens)
+        self.call_count += 1
+        if model_name and not self.model_name:
+            self.model_name = model_name
+    
+    def merge(self, other: 'TokenUsage'):
+        """Merge token usage from another TokenUsage instance."""
+        self.input_tokens += other.input_tokens
+        self.output_tokens += other.output_tokens
+        self.total_tokens += other.total_tokens
+        self.call_count += other.call_count
+
+
+@dataclass
 class VideoAnalysisResult:
     """Result of video analysis containing all extracted information."""
     video_metadata: VideoMetadata
@@ -125,41 +181,11 @@ class VideoAnalysisResult:
     processing_time: float = 0.0
     success: bool = True
     error_message: Optional[str] = None
+    token_usage: Optional[TokenUsage] = None
     
     def is_valid(self) -> bool:
         """Check if the analysis result is valid."""
         return self.success and self.error_message is None
-
-
-@dataclass
-class VideoAnalysisConfig:
-    """Configuration for video analysis."""
-    # Frame extraction
-    frame_extraction_fps: float = 1.0  # Extract 1 frame per second
-    min_frame_difference: float = 0.02  # Minimum visual change threshold (2% instead of 10%)
-    max_frames: int = 1000  # Maximum number of frames to process
-    
-    # UI detection
-    ui_detection_confidence: float = 0.7
-    ocr_languages: List[str] = field(default_factory=lambda: ['en'])
-    enable_ocr: bool = True
-    
-    # Action inference
-    action_confidence_threshold: float = 0.6  # Lower threshold to detect more subtle actions
-    temporal_smoothing_window: int = 3  # frames
-    enable_action_grouping: bool = True
-    
-    # Workflow generation
-    llm_model: str = "gpt-4o"
-    max_workflow_steps: int = 50
-    generate_descriptions: bool = False  # Disable LLM descriptions temporarily
-    include_validation_rules: bool = True
-    
-    # Performance
-    parallel_processing: bool = True
-    max_workers: int = 4
-    enable_caching: bool = True
-    cache_dir: Optional[Path] = None
 
 
 # Pydantic models for API endpoints
@@ -192,4 +218,22 @@ class WorkflowExecutionResponse(BaseModel):
     execution_id: str
     results: List[Dict[str, Any]]
     execution_time: float
-    error_message: Optional[str] = None 
+    error_message: Optional[str] = None
+
+
+class StructuredWorkflowOutput(BaseModel):
+    """Structured output format for LLM-generated workflow instructions."""
+    prompt: str = Field(
+        description="Human-readable workflow instructions with numbered steps"
+    )
+    start_url: str = Field(
+        description="The starting URL where the workflow should begin execution"
+    )
+    parameters: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Dictionary of parameters containing data used for actions"
+    )
+    token_usage: Optional[TokenUsage] = Field(
+        default=None,
+        description="Token usage information for the LLM call"
+    ) 
