@@ -4,15 +4,16 @@ __version__ = "0.1.0"
 
 from .models import (
     VideoAnalysisResult, VideoAnalysisConfig, StructuredWorkflowOutput,
-    TokenUsage, VideoAnalysisResponse
+    TokenUsage, VideoAnalysisResponse, WorkflowExecutionResponse
 )
-from .services import VideoUseService, WorkflowGenerationService
+from .services import VideoUseService, WorkflowGenerationService, WorkflowExecutionService
 from .analysis import VideoAnalysisService, GeminiAnalysisService, FrameExtractionService
 
 __all__ = [
     # Main services
     "VideoUseService",
     "WorkflowGenerationService",
+    "WorkflowExecutionService",
     
     # Analysis services
     "VideoAnalysisService",
@@ -25,4 +26,5 @@ __all__ = [
     "StructuredWorkflowOutput",
     "TokenUsage",
     "VideoAnalysisResponse",
+    "WorkflowExecutionResponse",
 ] 

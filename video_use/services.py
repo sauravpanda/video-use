@@ -5,15 +5,17 @@ import logging
 import os
 import uuid
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.output_parsers import PydanticOutputParser
+from browser_use import Agent
+from browser_use.browser import BrowserProfile
 
 from .models import (
     VideoAnalysisResult, VideoAnalysisConfig, StructuredWorkflowOutput,
-    TokenUsage, VideoAnalysisResponse
+    TokenUsage, VideoAnalysisResponse, WorkflowExecutionResponse
 )
 from .prompts import STRUCTURED_WORKFLOW_PROMPT, GEMINI_TO_STRUCTURED_PROMPT
 from .analysis.services import VideoAnalysisService, GeminiAnalysisService
@@ -29,6 +31,7 @@ class VideoUseService:
         self.analysis_service = VideoAnalysisService(self.config)
         self.gemini_service = GeminiAnalysisService()
         self.workflow_service = WorkflowGenerationService(self.config)
+        self.execution_service = WorkflowExecutionService()
         self.analysis_cache: Dict[str, VideoAnalysisResult] = {}
         
         logger.info("VideoUseService initialized")
@@ -153,6 +156,110 @@ class VideoUseService:
             gemini_analysis_text, start_url
         )
     
+    async def execute_workflow(
+        self,
+        workflow: StructuredWorkflowOutput,
+        execution_id: Optional[str] = None,
+        headless: bool = False,
+        timeout: int = 30
+    ) -> WorkflowExecutionResponse:
+        """
+        Execute a generated workflow using browser-use agent.
+        
+        Args:
+            workflow: The structured workflow to execute
+            execution_id: Optional execution ID for tracking
+            headless: Whether to run browser in headless mode
+            timeout: Timeout in seconds for workflow execution
+            
+        Returns:
+            WorkflowExecutionResponse with execution results
+        """
+        if not self.execution_service:
+            return WorkflowExecutionResponse(
+                success=False,
+                execution_id=execution_id or "unknown",
+                results=[],
+                execution_time=0.0,
+                error_message="Browser-use not available for workflow execution"
+            )
+        
+        return await self.execution_service.execute_workflow(
+            workflow, execution_id, headless, timeout
+        )
+    
+    async def analyze_and_execute_workflow(
+        self,
+        video_path: Path,
+        start_url: Optional[str] = None,
+        use_gemini: bool = True,
+        gemini_api_key: Optional[str] = None,
+        headless: bool = False,
+        timeout: int = 30
+    ) -> Dict[str, Any]:
+        """
+        Complete pipeline: analyze video, generate workflow, and execute it.
+        
+        Args:
+            video_path: Path to video file
+            start_url: Starting URL for workflow execution
+            use_gemini: Whether to use Gemini AI analysis
+            gemini_api_key: Optional Gemini API key
+            headless: Whether to run browser in headless mode
+            timeout: Timeout in seconds for workflow execution
+            
+        Returns:
+            Dictionary containing analysis result, workflow, and execution result
+        """
+        results = {
+            "analysis": None,
+            "workflow": None,
+            "execution": None,
+            "success": False
+        }
+        
+        try:
+            # Step 1: Analyze video
+            logger.info(f"Step 1: Analyzing video {video_path}")
+            analysis_result = await self.analyze_video_file(
+                video_path, use_gemini=use_gemini, gemini_api_key=gemini_api_key
+            )
+            results["analysis"] = analysis_result
+            
+            if not analysis_result.success:
+                results["error"] = "Video analysis failed"
+                return results
+            
+            # Step 2: Generate structured workflow
+            logger.info("Step 2: Generating structured workflow")
+            if use_gemini and analysis_result.workflow_steps:
+                analysis_text = analysis_result.workflow_steps[0].get('analysis_text', '')
+                workflow = await self.generate_structured_workflow_from_gemini(
+                    analysis_text, start_url
+                )
+            else:
+                workflow = await self.generate_structured_workflow(
+                    analysis_result.analysis_id, start_url
+                )
+            
+            results["workflow"] = workflow
+            
+            # Step 3: Execute workflow
+            logger.info("Step 3: Executing workflow with browser-use")
+            execution_result = await self.execute_workflow(
+                workflow, headless=headless, timeout=timeout
+            )
+            results["execution"] = execution_result
+            
+            results["success"] = execution_result.success
+            logger.info(f"Complete pipeline finished - Success: {results['success']}")
+            
+        except Exception as e:
+            logger.error(f"Pipeline failed: {e}")
+            results["error"] = str(e)
+        
+        return results
+    
     def _create_analysis_response(
         self, analysis_id: str, result: VideoAnalysisResult
     ) -> VideoAnalysisResponse:
@@ -180,12 +287,139 @@ class VideoUseService:
         )
 
 
+class WorkflowExecutionService:
+    """Service for executing workflows using browser-use agent."""
+    
+    def __init__(self):
+        self.active_executions: Dict[str, Any] = {}
+        logger.info("WorkflowExecutionService initialized")
+        self.llm = ChatGoogleGenerativeAI(
+            model="gemini-1.5-pro",
+            google_api_key=os.getenv('GOOGLE_API_KEY'),
+            temperature=0.1,
+            max_tokens=None,
+            timeout=None,
+            max_retries=2,
+        )
+    
+    async def execute_workflow(
+        self,
+        workflow: StructuredWorkflowOutput,
+        execution_id: Optional[str] = None,
+        headless: bool = False,
+        timeout: int = 30
+    ) -> WorkflowExecutionResponse:
+        """
+        Execute a structured workflow using browser-use agent.
+        
+        Args:
+            workflow: The workflow to execute
+            execution_id: Optional execution ID for tracking
+            headless: Whether to run browser in headless mode
+            timeout: Timeout in seconds
+            
+        Returns:
+            WorkflowExecutionResponse with execution results
+        """
+        if not execution_id:
+            execution_id = str(uuid.uuid4())
+        
+        start_time = asyncio.get_event_loop().time()
+        
+        try:
+            logger.info(f"Starting workflow execution {execution_id}")
+            
+            self.browser_profile = BrowserProfile(
+                window_size={"width": 1920, "height": 1080},
+                headless=headless,
+            )
+            # Initialize browser-use agent
+            agent = Agent(
+                task=workflow.prompt,
+                llm=self.llm,
+                browser_profile=self.browser_profile,
+            )
+            
+            # Store execution info
+            self.active_executions[execution_id] = {
+                "workflow": workflow,
+                "start_time": start_time,
+                "status": "running"
+            }
+            
+            # Execute the workflow
+            logger.info(f"Executing workflow: {workflow.prompt}")
+            
+            # Create task with timeout
+            execution_task = asyncio.create_task(
+                agent.run()
+            )
+            
+            try:
+                results = await asyncio.wait_for(execution_task, timeout=timeout)
+                
+                execution_time = asyncio.get_event_loop().time() - start_time
+                
+                # Update execution status
+                self.active_executions[execution_id]["status"] = "completed"
+                
+                logger.info(f"Workflow execution {execution_id} completed successfully")
+                
+                return WorkflowExecutionResponse(
+                    success=True,
+                    execution_id=execution_id,
+                    results=[{"workflow_result": str(results)}],
+                    execution_time=execution_time
+                )
+                
+            except asyncio.TimeoutError:
+                execution_task.cancel()
+                raise Exception(f"Workflow execution timed out after {timeout} seconds")
+            
+        except Exception as e:
+            execution_time = asyncio.get_event_loop().time() - start_time
+            logger.error(f"Workflow execution {execution_id} failed: {e}")
+            
+            # Update execution status
+            if execution_id in self.active_executions:
+                self.active_executions[execution_id]["status"] = "failed"
+            
+            return WorkflowExecutionResponse(
+                success=False,
+                execution_id=execution_id,
+                results=[],
+                execution_time=execution_time,
+                error_message=str(e)
+            )
+        finally:
+            # Cleanup
+            if execution_id in self.active_executions:
+                del self.active_executions[execution_id]
+    
+    def get_execution_status(self, execution_id: str) -> Optional[Dict[str, Any]]:
+        """Get status of an active execution."""
+        return self.active_executions.get(execution_id)
+    
+    def list_active_executions(self) -> List[str]:
+        """List all active execution IDs."""
+        return list(self.active_executions.keys())
+
+
 class WorkflowGenerationService:
     """Service for generating structured workflows from video analysis."""
     
     def __init__(self, config: VideoAnalysisConfig):
         self.config = config
         logger.info("WorkflowGenerationService initialized")
+        api_key = os.getenv('GOOGLE_API_KEY')
+        self.llm = ChatGoogleGenerativeAI(
+            model="gemini-1.5-pro",
+            google_api_key=api_key,
+            temperature=0.1,
+            max_tokens=None,
+            timeout=None,
+            max_retries=2,
+        )
     
     async def convert_actions_to_structured_output(
         self, actions, start_url: Optional[str] = None
@@ -212,14 +446,6 @@ class WorkflowGenerationService:
                 token_usage=TokenUsage()
             )
         
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-pro",
-            google_api_key=api_key,
-            temperature=0.1,
-            max_tokens=None,
-            timeout=None,
-            max_retries=2,
-        )
         parser = PydanticOutputParser(pydantic_object=StructuredWorkflowOutput)
         
         # Prepare actions data for LLM
@@ -245,7 +471,7 @@ Please generate clear workflow instructions and extract all relevant parameters.
                 HumanMessage(content=human_prompt)
             ]
             
-            response = await llm.ainvoke(messages)
+            response = await self.llm.ainvoke(messages)
             result = parser.parse(response.content)
             
             # Track token usage
@@ -289,14 +515,6 @@ Please generate clear workflow instructions and extract all relevant parameters.
                 token_usage=TokenUsage()
             )
         
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-pro",
-            google_api_key=api_key,
-            temperature=0.1,
-            max_tokens=None,
-            timeout=None,
-            max_retries=2,
-        )
         parser = PydanticOutputParser(pydantic_object=StructuredWorkflowOutput)
         
         # Create prompts
@@ -322,7 +540,7 @@ Please extract:
                 HumanMessage(content=human_prompt)
             ]
             
-            response = await llm.ainvoke(messages)
+            response = await self.llm.ainvoke(messages)
             result = parser.parse(response.content)
             
             # Track token usage

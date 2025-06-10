@@ -4,43 +4,100 @@ This directory contains examples demonstrating how to use the video-use library 
 
 ## Available Examples
 
-### 1. Basic Example (`basic_example.py`)
-A comprehensive example showing all main features of the library.
+### `simple_example.py`
+Basic demonstration of video analysis and workflow generation.
 
-**Features:**
-- Frame extraction from videos
-- AI-powered analysis using Gemini
-- VideoService unified interface
-- Multiple analysis modes
-
-**Usage:**
 ```bash
-# Frame extraction mode
-python basic_example.py sample_form_filling.mp4 --mode frames
-
-# AI analysis mode (requires GOOGLE_API_KEY)
-python basic_example.py sample_form_filling.mp4 --mode ai
-
-# Traditional service analysis
-python basic_example.py sample_form_filling.mp4 --mode service
-
-# AI service analysis
-python basic_example.py sample_form_filling.mp4 --mode service-ai
+cd examples
+python simple_example.py sample_form_filling.mp4
 ```
 
-### 2. Frame Extraction Example (`frame-extraction/example_frame_extraction.py`)
-Focused example for frame extraction and analysis.
+**Features shown:**
+- Video loading and analysis
+- Gemini AI analysis
+- Structured workflow generation
+- Token usage tracking
 
-**Usage:**
+### `workflow_execution_example.py`
+Complete pipeline demonstration including workflow execution with browser-use.
+
 ```bash
-cd frame-extraction
+cd examples
+export GOOGLE_API_KEY="your-gemini-api-key"
+python workflow_execution_example.py sample_form_filling.mp4
+
+# With options
+python workflow_execution_example.py my_video.mp4 --mode individual --headless
+```
+
+**Features shown:**
+- Complete pipeline: analyze → generate → execute
+- Individual step control for advanced use cases
+- Browser automation execution
+- Error handling and result tracking
+- Execution timeout and headless mode configuration
+- Command line argument support for flexible video input
+
+### `csv_batch_execution_example.py`
+CSV-based batch processing for executing workflows with multiple data sets.
+
+```bash
+cd examples
+export GOOGLE_API_KEY="your-gemini-api-key"
+python csv_batch_execution_example.py sample_form_filling.mp4
+
+# With custom CSV and options
+python csv_batch_execution_example.py login_demo.mp4 user_data.csv --max-concurrent 3 --timeout 45
+```
+
+**Features shown:**
+- Single video analysis for workflow template creation
+- CSV data loading and processing
+- Dynamic workflow customization with data placeholders
+- Concurrent batch execution with rate limiting
+- Comprehensive execution reporting and statistics
+- Configurable parameters via command line arguments
+
+### `frame-extraction/`
+Advanced examples focusing on frame extraction and computer vision analysis.
+
+```bash
+cd examples/frame-extraction
 python example_frame_extraction.py ../sample_form_filling.mp4 --mode frames
 python example_frame_extraction.py ../sample_form_filling.mp4 --mode gemini
 ```
 
-## Prerequisites
+**Features shown:**
+- Frame extraction with different sampling rates
+- Visual change detection
+- Computer vision analysis
+- AI-powered action detection
 
-### For Frame Analysis
+## Sample Data
+
+### `sample_form_filling.mp4`
+A sample video showing form filling interactions. This video demonstrates:
+- Navigating to a login page
+- Filling out username and password fields
+- Clicking submit button
+- Form validation
+
+Use this video to test the analysis capabilities and understand the expected input format.
+
+### `sample_data.csv` (Auto-generated)
+The CSV batch processing example automatically creates a sample CSV file with the following structure:
+```csv
+username,password,first_name,last_name,company
+user1@example.com,password123,John,Doe,Acme Corp
+user2@example.com,secret456,Jane,Smith,Tech Solutions
+user3@example.com,mypass789,Bob,Johnson,StartupXYZ
+```
+
+This CSV demonstrates how to structure data for batch processing with dynamic workflow execution.
+
+## Setup Requirements
+
+### For Basic Examples
 ```bash
 pip install opencv-python numpy
 ```
@@ -51,52 +108,74 @@ pip install langchain-google-genai
 export GOOGLE_API_KEY="your-gemini-api-key"
 ```
 
-## Sample Video
+### For Workflow Execution
+Ensure browser-use is properly installed (included in video-use dependencies) and that you have appropriate browser drivers.
 
-The `sample_form_filling.mp4` file is included as a demonstration video showing a user filling out a web form. You can use your own videos by:
+### For Frame Extraction Examples
+All dependencies are included in the main video-use package.
 
-1. Recording browser interactions (10-30 seconds recommended)
-2. Saving as MP4, AVI, MOV, MKV, or WebM format
-3. Replacing the file path in the examples
+## Usage Tips
 
-## Quick Start
+1. **Video Quality**: Use high-resolution videos (1080p+) for best results
+2. **Clear Actions**: Ensure mouse movements and clicks are clearly visible
+3. **Stable UI**: Avoid overlapping windows or UI animations during recording
+4. **API Keys**: Set up your Gemini API key for AI-powered analysis
+5. **CSV Format**: Use clear column names that match the actions in your video (e.g., username, password, email)
+6. **Placeholders**: Use `{column_name}` format in your workflow prompts for dynamic data replacement
 
-1. **Install dependencies:**
-   ```bash
-   pip install video-use
-   ```
+## Workflow Execution Features
 
-2. **Run basic frame analysis:**
-   ```bash
-   python basic_example.py sample_form_filling.mp4
-   ```
+### Complete Pipeline
+The `workflow_execution_example.py` demonstrates the full pipeline:
+1. **Video Analysis**: Analyze browser interaction video with Gemini AI
+2. **Workflow Generation**: Create structured, executable workflow instructions
+3. **Browser Execution**: Execute the workflow using browser-use agent
+4. **Result Validation**: Track execution success and performance metrics
 
-3. **Run AI analysis (with API key):**
-   ```bash
-   export GOOGLE_API_KEY="your-key"
-   python basic_example.py sample_form_filling.mp4 --mode ai
-   ```
+### CSV Batch Processing
+The `csv_batch_execution_example.py` enables:
+1. **Template Creation**: Analyze video once to create a reusable workflow template
+2. **Data Loading**: Load multiple data sets from CSV files
+3. **Dynamic Execution**: Execute the same workflow with different data for each row
+4. **Concurrent Processing**: Process multiple workflows simultaneously with rate limiting
+5. **Comprehensive Reporting**: Track success rates, execution times, and error details
 
-## Example Outputs
+## Troubleshooting
 
-### Frame Analysis
-- Lists extracted frames with timestamps
-- Shows frame numbers and timing information
-- Useful for understanding video structure
+### Common Issues
 
-### AI Analysis
-- Provides step-by-step user action descriptions
-- Identifies UI elements and interactions
-- Generates professional UX analysis reports
+**"Video file not found"**
+- Ensure the video file path is correct
+- Check that the video file is in a supported format (MP4, AVI, MOV, MKV, WebM)
 
-### Service Analysis
-- Returns structured workflow data
-- Can export to browser-use compatible format
-- Provides confidence scores and metadata
+**"API key not set"**
+- Set the GOOGLE_API_KEY environment variable
+- Verify your API key has access to Gemini models
 
-## Tips
+**"Analysis failed"**
+- Check video quality and format
+- Ensure the video contains clear browser interactions
+- Review the error logs for specific issues
 
-- **Video Quality:** Higher quality videos provide better analysis results
-- **Video Length:** Shorter videos (10-60 seconds) process faster
-- **Recording:** Focus on clear UI interactions for best results
-- **Format:** MP4 format generally works best 
+**"Workflow execution failed"**
+- Verify browser-use is properly installed
+- Check that the target website is accessible
+- Ensure the workflow instructions are clear and actionable
+- Review browser console for JavaScript errors
+
+**"CSV batch processing issues"**
+- Verify CSV file format and encoding (UTF-8 recommended)
+- Check that column names match expected placeholders in the workflow
+- Review individual execution errors in the batch results
+
+### Performance Optimization
+
+**For Large CSV Files:**
+- Adjust `max_concurrent` parameter to balance speed vs. resource usage
+- Increase `timeout` for complex workflows
+- Use `headless=True` for faster execution
+
+**For Better Analysis:**
+- Record videos at consistent speed
+- Ensure good lighting and contrast
+- Avoid rapid mouse movements or complex animations 

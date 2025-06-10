@@ -54,6 +54,14 @@ async def main():
             start_url="https://example.com"
         )
         print(f"Generated workflow: {workflow.prompt}")
+        
+        # Execute the workflow with browser-use
+        execution_result = await service.execute_workflow(workflow)
+        
+        if execution_result.success:
+            print(f"Workflow executed successfully!")
+        else:
+            print(f"Execution failed: {execution_result.error_message}")
 
 asyncio.run(main())
 ```
@@ -72,6 +80,14 @@ python example_frame_extraction.py ../sample_form_filling.mp4 --mode frames
 # AI analysis (requires GOOGLE_API_KEY environment variable)
 export GOOGLE_API_KEY="your-gemini-api-key"
 python example_frame_extraction.py ../sample_form_filling.mp4 --mode gemini
+
+# Complete workflow execution (analyze + generate + execute)
+cd examples
+python workflow_execution_example.py sample_form_filling.mp4
+
+# CSV batch processing (execute workflow with multiple data sets)
+cd examples
+python csv_batch_execution_example.py sample_form_filling.mp4
 ```
 
 ## 📋 Features
@@ -90,6 +106,8 @@ python example_frame_extraction.py ../sample_form_filling.mp4 --mode gemini
 - **Asynchronous processing**: Non-blocking analysis for better performance
 - **Multiple analysis modes**: Choose between AI analysis or traditional frame processing
 - **Workflow export**: Generate structured outputs compatible with browser automation
+- **Workflow execution**: Direct execution of generated workflows using browser-use agent
+- **CSV batch processing**: Execute workflows with dynamic data from CSV files
 
 ## 🛠️ Configuration
 
@@ -229,6 +247,28 @@ cd examples
 python simple_example.py sample_form_filling.mp4
 ```
 
+### Complete Workflow Execution Example
+```bash
+# Analyze video, generate workflow, and execute with browser-use
+cd examples
+export GOOGLE_API_KEY="your-gemini-api-key"
+python workflow_execution_example.py sample_form_filling.mp4
+
+# With additional options
+python workflow_execution_example.py my_video.mp4 --mode individual --headless
+```
+
+### CSV Batch Processing Example
+```bash
+# Execute workflow multiple times with CSV data
+cd examples
+export GOOGLE_API_KEY="your-gemini-api-key"
+python csv_batch_execution_example.py sample_form_filling.mp4
+
+# With custom CSV file and options
+python csv_batch_execution_example.py login_demo.mp4 my_data.csv --max-concurrent 3 --timeout 45
+```
+
 ### Custom Python Integration
 ```python
 from video_use import VideoUseService, VideoAnalysisConfig
@@ -241,12 +281,16 @@ config = VideoAnalysisConfig(
 )
 service = VideoUseService(config)
 
-# Analyze video
-result = await service.analyze_video_file(
+# Complete pipeline: analyze + generate + execute
+results = await service.analyze_and_execute_workflow(
     Path("your_video.mp4"),
+    start_url="https://your-target-site.com",
     use_gemini=True,
-    user_prompt="Analyze this e-commerce checkout flow"
+    headless=True,
+    timeout=60
 )
+
+print(f"Pipeline success: {results['success']}")
 ```
 
 ## 🏗️ Architecture
@@ -280,8 +324,31 @@ video-use/
 
 ## 🔌 Integration with Browser-Use
 
-Video-Use generates structured workflows that can be integrated with [browser-use](https://github.com/browser-use/browser-use):
+Video-Use provides seamless integration with [browser-use](https://github.com/browser-use/browser-use) through multiple approaches:
 
+### Direct Execution (Recommended)
+```python
+from video_use import VideoUseService
+
+# Complete pipeline with automatic execution
+service = VideoUseService()
+results = await service.analyze_and_execute_workflow(
+    Path("login_demo.mp4"),
+    start_url="https://example.com/login",
+    use_gemini=True,
+    headless=True,
+    timeout=60
+)
+
+if results["success"]:
+    print("Workflow executed successfully!")
+    print(f"Analysis: {results['analysis']}")
+    print(f"Execution time: {results['execution'].execution_time}s")
+else:
+    print(f"Pipeline failed: {results.get('error', 'Unknown error')}")
+```
+
+### Manual Integration
 ```python
 from video_use import VideoUseService
 from browser_use import Agent
@@ -300,17 +367,48 @@ if result.success:
         start_url="https://example.com/login"
     )
     
-    # 3. Use the workflow prompt with browser-use Agent
+    # 3. Execute using video-use's built-in execution service
+    execution_result = await service.execute_workflow(workflow)
+    
+    # OR manually use browser-use Agent
     agent = Agent()
     await agent.run(workflow.prompt)
     
-    # The workflow will contain:
+    # The workflow contains:
     # - Natural language description of actions
     # - Start URL for the automation
     # - Extracted parameters and values
     print(f"Workflow: {workflow.prompt}")
     print(f"Start URL: {workflow.start_url}")
     print(f"Parameters: {workflow.parameters}")
+```
+
+### CSV Batch Processing
+```python
+from video_use import VideoUseService
+from examples.csv_batch_execution_example import CSVBatchProcessor
+
+# Batch process multiple data sets with same workflow
+service = VideoUseService()
+processor = CSVBatchProcessor(service)
+
+# Analyze video once to create template
+await processor.analyze_video_for_template(
+    Path("form_filling_demo.mp4"),
+    template_start_url="https://example.com/form"
+)
+
+# Load CSV data and execute batch
+csv_data = processor.load_csv_data(Path("user_data.csv"))
+results = await processor.execute_batch(
+    csv_data,
+    headless=True,
+    max_concurrent=3
+)
+
+print(f"Processed {len(results)} workflows")
+successful = sum(1 for r in results if r['success'])
+print(f"Success rate: {successful}/{len(results)}")
 ```
 
 ## 🤖 AI Models
@@ -346,8 +444,8 @@ pip install -e ".[dev]"
 ## 🚧 Roadmap
 
 ### High Priority
-- **End-to-end testing integration**: Implement automated testing where Browser Use Agent executes the generated workflows to validate accuracy
-- **Parameterized workflow execution**: Support dynamic values in workflows (e.g., CSV data input for batch form filling)
+- ✅ **End-to-end testing integration**: Implement automated testing where Browser Use Agent executes the generated workflows to validate accuracy
+- ✅ **Parameterized workflow execution**: Support dynamic values in workflows (e.g., CSV data input for batch form filling)
 - **Workflow validation**: Add validation checks to ensure generated prompts produce expected results
 
 ### Medium Priority  
