@@ -4,12 +4,12 @@
 
 Video-Use analyzes screen recordings of browser interactions and automatically generates executable workflows compatible with [browser-use](https://github.com/browser-use/browser-use) for automation.
 
-## 🎯 What it does
+## 🎯 Core Features
 
-1. **Extracts frames** from your browser interaction videos
-2. **Analyzes user interactions** using AI (Gemini) to understand step-by-step actions
-3. **Generates structured workflows** that can be executed with browser-use automation
-4. **Provides both frame-based and AI-powered analysis** for different use cases
+1. **Video Analysis**: Extract and analyze browser interaction videos using AI (Gemini)
+2. **Workflow Generation**: Convert analyzed actions into structured workflows
+3. **Workflow Execution**: Execute generated workflows using browser-use automation
+4. **Batch Processing**: Support for executing workflows with multiple data sets via CSV
 
 ## 🚀 Quick Start
 
@@ -26,8 +26,6 @@ pip install -e .
 
 ### Basic Usage
 
-#### Python API
-
 ```python
 from video_use import VideoUseService, VideoAnalysisConfig
 from pathlib import Path
@@ -41,21 +39,18 @@ async def main():
     )
     service = VideoUseService(config)
     
-    # For Gemini AI analysis (requires GOOGLE_API_KEY)
+    # Analyze video with Gemini AI
     result = await service.analyze_video_file(
         Path("recording.mp4"),
         use_gemini=True
     )
     
     if result.success:
-        # Generate structured workflow
+        # Generate and execute workflow
         workflow = await service.generate_structured_workflow_from_gemini(
             result.workflow_steps[0]['analysis_text'],
             start_url="https://example.com"
         )
-        print(f"Generated workflow: {workflow.prompt}")
-        
-        # Execute the workflow with browser-use
         execution_result = await service.execute_workflow(workflow)
         
         if execution_result.success:
@@ -66,71 +61,27 @@ async def main():
 asyncio.run(main())
 ```
 
-#### Running Examples
+## 📋 Key Components
 
-```bash
-# Basic frame extraction
-cd examples
-python simple_example.py sample_form_filling.mp4
+### Video Analysis Service
+- Frame extraction from browser interaction videos
+- AI-powered analysis using Google Gemini
+- Structured workflow generation
+- Support for MP4, AVI, MOV, MKV, WebM formats
 
-# Frame extraction with more detail
-cd examples/frame-extraction
-python example_frame_extraction.py ../sample_form_filling.mp4 --mode frames
+### Workflow Execution Service
+- Browser automation using browser-use
+- Configurable execution parameters (timeout, headless mode)
+- Shared browser session support
+- Execution status tracking and management
 
-# AI analysis (requires GOOGLE_API_KEY environment variable)
-export GOOGLE_API_KEY="your-gemini-api-key"
-python example_frame_extraction.py ../sample_form_filling.mp4 --mode gemini
-
-# Complete workflow execution (analyze + generate + execute)
-cd examples
-python workflow_execution_example.py sample_form_filling.mp4
-
-# CSV batch processing (execute workflow with multiple data sets)
-cd examples
-python csv_batch_execution_example.py sample_form_filling.mp4
-```
-
-## 📋 Features
-
-### Core Capabilities
-- **Multi-format support**: MP4, AVI, MOV, MKV, WebM support for video input
-- **Intelligent frame extraction**: Adaptive sampling based on visual changes
-- **AI-powered analysis**: Uses Google Gemini for understanding user interactions
-- **Structured workflow generation**: Converts analysis into browser-use compatible formats
-- **Frame-based analysis**: Traditional computer vision approach for detailed frame inspection
-- **Flexible configuration**: Customizable analysis parameters
-
-### Analysis Features
-- **Gemini AI integration**: Advanced natural language understanding of user actions
-- **Frame extraction service**: Smart sampling to identify key interaction moments
-- **Asynchronous processing**: Non-blocking analysis for better performance
-- **Multiple analysis modes**: Choose between AI analysis or traditional frame processing
-- **Workflow export**: Generate structured outputs compatible with browser automation
-- **Workflow execution**: Direct execution of generated workflows using browser-use agent
-- **CSV batch processing**: Execute workflows with dynamic data from CSV files
+### Batch Processing
+- CSV-based data input
+- Dynamic workflow customization
+- Concurrent execution support
+- Comprehensive execution reporting
 
 ## 🛠️ Configuration
-
-### Analysis Configuration
-
-```python
-from video_use import VideoAnalysisConfig
-
-config = VideoAnalysisConfig(
-    # Frame extraction settings
-    frame_extraction_fps=1.0,           # Extract 1 frame per second
-    min_frame_difference=0.02,           # Minimum difference to consider frames different
-    max_frames=1000,                     # Maximum frames to process
-    
-    # AI analysis settings
-    llm_model="gemini-1.5-pro",        # Gemini model for analysis
-    
-    # Performance settings
-    parallel_processing=True,            # Enable parallel processing
-    max_workers=4,                      # Number of worker threads
-    enable_caching=True                 # Enable result caching
-)
-```
 
 ### Environment Variables
 
@@ -142,40 +93,32 @@ export GOOGLE_API_KEY="your-gemini-api-key"
 export GOOGLE_API_BASE="https://generativelanguage.googleapis.com"
 ```
 
+### Analysis Configuration
+
+```python
+from video_use import VideoAnalysisConfig
+
+config = VideoAnalysisConfig(
+    frame_extraction_fps=1.0,    # Extract 1 frame per second
+    max_frames=20,              # Maximum frames to process
+)
+```
+
+### Execution Configuration
+
+```python
+# Workflow execution options
+execution_result = await service.execute_workflow(
+    workflow,
+    headless=False,            # Run browser in visible mode
+    timeout=30,               # Execution timeout in seconds
+    use_shared_session=True   # Use shared browser session
+)
+```
+
 ## 📊 Example Output
 
-### Frame Extraction Results
-```bash
-🔍 Extracting frames from: sample_form_filling.mp4
-✅ Extracted 15 frames
-   Frame 1: #30 at 1.00s
-   Frame 2: #60 at 2.00s
-   Frame 3: #90 at 3.00s
-   Frame 4: #120 at 4.00s
-   Frame 5: #150 at 5.00s
-   ... and 10 more frames
-```
-
 ### AI Analysis Results
-```bash
-🤖 Analyzing video with Gemini: sample_form_filling.mp4
-✅ Analysis complete!
-============================================================
-STEP-BY-STEP USER ACTIONS:
-============================================================
-
-1. The user navigates to a login page at the beginning of the video
-2. They click on the username/email input field
-3. The user types their email address into the field
-4. Next, they click on the password input field
-5. The user enters their password
-6. Finally, they click the "Login" or "Sign In" button to submit the form
-7. The page transitions to show a successful login or dashboard
-
-This appears to be a standard login workflow with form interaction.
-```
-
-### Structured Workflow Output
 ```python
 workflow = StructuredWorkflowOutput(
     prompt="Navigate to login page, fill out username and password, then submit the form",
@@ -184,114 +127,76 @@ workflow = StructuredWorkflowOutput(
         "username": "user@example.com",
         "password": "[HIDDEN]",
         "login_button_text": "Login"
-    },
-    token_usage=TokenUsage(
-        input_tokens=1250,
-        output_tokens=180,
-        total_tokens=1430
-    )
+    }
 )
 ```
 
-## 🎥 Recording Tips
-
-For best analysis results:
-
-### Recording Setup
-- **Resolution**: Use 1080p or higher
-- **Frame rate**: 30fps or higher recommended
-- **Browser**: Full screen or consistent window size
-- **Clean UI**: Avoid overlapping windows or notifications
-
-### Interaction Guidelines
-- **Deliberate movements**: Move mouse smoothly and deliberately
-- **Clear clicks**: Click precisely on target elements
-- **Pause between actions**: Brief pause after each action helps detection
-- **Visible UI**: Ensure buttons and inputs are clearly visible
-- **Text input**: Type at normal speed, avoid very fast typing
-
-### What Works Best
-- ✅ Form filling workflows
-- ✅ Button click sequences  
-- ✅ Navigation flows
-- ✅ Multi-step processes
-- ✅ E-commerce interactions
-
-### Limitations
-- ❌ Very fast mouse movements
-- ❌ Drag and drop (limited support)
-- ❌ Keyboard shortcuts
-- ❌ Complex animations
-
-## 🔧 Available Examples
-
-### Frame Extraction Example
-```bash
-cd examples/frame-extraction
-python example_frame_extraction.py ../sample_form_filling.mp4 --mode frames
-```
-
-### AI Analysis Example  
-```bash
-# Set up Gemini API key
-export GOOGLE_API_KEY="your-gemini-api-key"
-
-# Run AI analysis
-cd examples/frame-extraction
-python example_frame_extraction.py ../sample_form_filling.mp4 --mode gemini
-```
-
-### Simple Service Example
-```bash
-cd examples
-python simple_example.py sample_form_filling.mp4
-```
-
-### Complete Workflow Execution Example
-```bash
-# Analyze video, generate workflow, and execute with browser-use
-cd examples
-export GOOGLE_API_KEY="your-gemini-api-key"
-python workflow_execution_example.py sample_form_filling.mp4
-
-# With additional options
-python workflow_execution_example.py my_video.mp4 --mode individual --headless
-```
-
-### CSV Batch Processing Example
-```bash
-# Execute workflow multiple times with CSV data
-cd examples
-export GOOGLE_API_KEY="your-gemini-api-key"
-python csv_batch_execution_example.py sample_form_filling.mp4
-
-# With custom CSV file and options
-python csv_batch_execution_example.py login_demo.mp4 my_data.csv --max-concurrent 3 --timeout 45
-```
-
-### Custom Python Integration
+### Execution Results
 ```python
-from video_use import VideoUseService, VideoAnalysisConfig
-from pathlib import Path
-
-# Create service with custom config
-config = VideoAnalysisConfig(
-    frame_extraction_fps=2.0,
-    max_frames=50
+execution_response = WorkflowExecutionResponse(
+    success=True,
+    execution_id="550e8400-e29b-41d4-a716-446655440000",
+    results=[{"workflow_result": "Workflow completed successfully"}],
+    execution_time=12.5
 )
-service = VideoUseService(config)
-
-# Complete pipeline: analyze + generate + execute
-results = await service.analyze_and_execute_workflow(
-    Path("your_video.mp4"),
-    start_url="https://your-target-site.com",
-    use_gemini=True,
-    headless=True,
-    timeout=60
-)
-
-print(f"Pipeline success: {results['success']}")
 ```
+
+## 🎥 Recording Guidelines
+
+For optimal analysis results:
+
+1. **Video Quality**
+   - Use 1080p or higher resolution
+   - Record at 30fps or higher
+   - Ensure good lighting and contrast
+
+2. **Browser Setup**
+   - Use full screen or consistent window size
+   - Avoid overlapping windows
+   - Keep UI elements clearly visible
+
+3. **Interaction Best Practices**
+   - Move mouse deliberately and smoothly
+   - Click precisely on target elements
+   - Pause briefly between actions
+   - Type at normal speed
+
+## 🔧 Examples
+
+See the [examples directory](examples/README.md) for detailed usage examples:
+
+- Basic video analysis and workflow generation
+- Complete workflow execution pipeline
+- CSV-based batch processing
+- Frame extraction and analysis
+
+## 📝 Requirements
+
+- Python 3.8+
+- OpenAI API key (for GPT-4)
+- Google API key (for Gemini)
+- Modern web browser (Chrome recommended)
+
+## 🔍 Troubleshooting
+
+### Common Issues
+
+1. **Video Analysis Fails**
+   - Verify video format and quality
+   - Check API key configuration
+   - Ensure clear browser interactions
+
+2. **Workflow Execution Fails**
+   - Verify browser-use installation
+   - Check website accessibility
+   - Review browser console for errors
+
+3. **Batch Processing Issues**
+   - Verify CSV format and encoding
+   - Check column names match workflow parameters
+   - Review individual execution errors
+
+For more detailed troubleshooting, see the [examples README](examples/README.md).
 
 ## 🏗️ Architecture
 
@@ -455,7 +360,8 @@ pip install -e ".[dev]"
 
 ## 🙏 Acknowledgments
 
-- [browser-use](https://github.com/browser-use/browser-use) - Browser automation framework
+- [browser-use](https://github.com/browser-use/browser-use) - Browser automation framework that powers our workflow execution
+- [Google Gemini](https://deepmind.google/technologies/gemini/) - Advanced AI model that enables intelligent video analysis
 - [OpenCV](https://opencv.org/) - Computer vision library
 
 ---

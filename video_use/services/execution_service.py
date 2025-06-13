@@ -6,9 +6,10 @@ import os
 import uuid
 from typing import Optional, Dict, Any, List
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from browser_use import Agent
 from browser_use.browser import BrowserProfile
+from browser_use.browser.session import BrowserSession
 
 from ..models.workflow import StructuredWorkflowOutput
 from ..models.api import WorkflowExecutionResponse
@@ -21,22 +22,42 @@ class WorkflowExecutionService:
     
     def __init__(self):
         self.active_executions: Dict[str, Any] = {}
+        self.browser_session: Optional[BrowserSession] = None
         logger.info("WorkflowExecutionService initialized")
-        self.llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-pro",
-            google_api_key=os.getenv('GOOGLE_API_KEY'),
+        self.llm = ChatOpenAI(
+            model="gpt-4.1",
+            openai_api_key=os.getenv('OPENAI_API_KEY'),
             temperature=0.1,
             max_tokens=None,
             timeout=None,
             max_retries=2,
         )
     
+    async def start_browser_session(self, headless: bool = False):
+        """Start a shared browser session if not already running."""
+        if not self.browser_session:
+            self.browser_session = BrowserSession(
+                keep_alive=True,
+                user_data_dir=None,
+                headless=headless,
+            )
+            await self.browser_session.start()
+            logger.info("Started shared browser session")
+    
+    async def stop_browser_session(self):
+        """Stop the shared browser session if running."""
+        if self.browser_session:
+            await self.browser_session.kill()
+            self.browser_session = None
+            logger.info("Stopped shared browser session")
+    
     async def execute_workflow(
         self,
         workflow: StructuredWorkflowOutput,
         execution_id: Optional[str] = None,
         headless: bool = False,
-        timeout: int = 30
+        timeout: int = 30,
+        use_shared_session: bool = True
     ) -> WorkflowExecutionResponse:
         """
         Execute a structured workflow using browser-use agent.
@@ -46,6 +67,7 @@ class WorkflowExecutionService:
             execution_id: Optional execution ID for tracking
             headless: Whether to run browser in headless mode
             timeout: Timeout in seconds
+            use_shared_session: Whether to use a shared browser session
             
         Returns:
             WorkflowExecutionResponse with execution results
@@ -58,15 +80,22 @@ class WorkflowExecutionService:
         try:
             logger.info(f"Starting workflow execution {execution_id}")
             
-            self.browser_profile = BrowserProfile(
-                window_size={"width": 1920, "height": 1080},
-                headless=headless,
-            )
+            # Use shared session if requested
+            if use_shared_session:
+                await self.start_browser_session(headless)
+                browser_profile = None  # Not needed when using shared session
+            else:
+                browser_profile = BrowserProfile(
+                    window_size={"width": 1920, "height": 1080},
+                    headless=headless,
+                )
+            
             # Initialize browser-use agent
             agent = Agent(
                 task=workflow.prompt,
                 llm=self.llm,
-                browser_profile=self.browser_profile,
+                browser_profile=browser_profile,
+                browser_session=self.browser_session if use_shared_session else None
             )
             
             # Store execution info
@@ -121,9 +150,13 @@ class WorkflowExecutionService:
                 error_message=str(e)
             )
         finally:
-            # Cleanup
+            # Cleanup execution tracking
             if execution_id in self.active_executions:
                 del self.active_executions[execution_id]
+            
+            # Only stop browser session if not using shared session
+            if not use_shared_session and self.browser_session:
+                await self.stop_browser_session()
     
     def get_execution_status(self, execution_id: str) -> Optional[Dict[str, Any]]:
         """Get status of an active execution."""

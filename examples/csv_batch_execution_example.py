@@ -143,7 +143,7 @@ class CSVBatchProcessor:
             customized_prompt = customized_prompt.replace(placeholder_spaced, value)
         
         return StructuredWorkflowOutput(
-            prompt=customized_prompt,
+            prompt=customized_prompt + f"All variables for missing or incorrect values {row_data}",
             start_url=customized_start_url,
             parameters=customized_parameters,
             token_usage=TokenUsage()
@@ -155,7 +155,8 @@ class CSVBatchProcessor:
         start_url_template: str = None,
         headless: bool = True,
         timeout: int = 60,
-        max_concurrent: int = 1
+        max_concurrent: int = 4,
+        use_shared_session: bool = True
     ) -> List[Dict[str, Any]]:
         """Execute workflow for each row in CSV data."""
         results = []
@@ -165,6 +166,7 @@ class CSVBatchProcessor:
         
         logger.info(f"Starting batch execution for {len(csv_data)} rows")
         logger.info(f"Max concurrent executions: {max_concurrent}")
+        logger.info(f"Using shared browser session: {use_shared_session}")
         
         # Create semaphore to limit concurrent executions
         semaphore = asyncio.Semaphore(max_concurrent)
@@ -174,8 +176,8 @@ class CSVBatchProcessor:
                 try:
                     logger.info(f"Processing row {index + 1}/{len(csv_data)}")
                     
-                    # Add delay to respect API rate limits
-                    if index > 0:  # No delay for first request
+                    # Add delay to respect API rate limits only when not using shared session
+                    if not use_shared_session and index > 0:  # No delay for first request
                         await asyncio.sleep(2)  # 2 second delay between requests
                     
                     # Customize workflow for this row
@@ -183,11 +185,12 @@ class CSVBatchProcessor:
                         row_data, start_url_template
                     )
                     
-                    # Execute workflow
+                    # Execute workflow with shared session
                     execution_result = await self.service.execute_workflow(
                         customized_workflow,
                         headless=headless,
-                        timeout=timeout
+                        timeout=timeout,
+                        use_shared_session=use_shared_session
                     )
                     
                     result = {
@@ -217,25 +220,31 @@ class CSVBatchProcessor:
                         'error': str(e)
                     }
         
-        # Execute all rows concurrently (with semaphore limiting)
-        tasks = [
-            execute_single_row(i, row_data) 
-            for i, row_data in enumerate(csv_data)
-        ]
-        
-        results = await asyncio.gather(*tasks)
-        
-        # Summary
-        successful = sum(1 for r in results if r['success'])
-        failed = len(results) - successful
-        total_time = sum(r['execution_time'] for r in results)
-        
-        logger.info(f"🎯 Batch execution complete!")
-        logger.info(f"   ✅ Successful: {successful}")
-        logger.info(f"   ❌ Failed: {failed}")
-        logger.info(f"   ⏱️ Total execution time: {total_time:.2f}s")
-        
-        return results
+        try:
+            # Execute all rows concurrently (with semaphore limiting)
+            tasks = [
+                execute_single_row(i, row_data) 
+                for i, row_data in enumerate(csv_data)
+            ]
+            
+            results = await asyncio.gather(*tasks)
+            
+            # Summary
+            successful = sum(1 for r in results if r['success'])
+            failed = len(results) - successful
+            total_time = sum(r['execution_time'] for r in results)
+            
+            logger.info(f"🎯 Batch execution complete!")
+            logger.info(f"   ✅ Successful: {successful}")
+            logger.info(f"   ❌ Failed: {failed}")
+            logger.info(f"   ⏱️ Total execution time: {total_time:.2f}s")
+            
+            return results
+            
+        finally:
+            # Stop shared browser session if we were using one
+            if use_shared_session:
+                await self.service.execution_service.stop_browser_session()
 
 
 async def main(video_path: Path, csv_path: Path, args):
@@ -259,10 +268,10 @@ async def main(video_path: Path, csv_path: Path, args):
         create_sample_csv(csv_path)
     
     # Check for required API key
-    api_key = os.getenv("GOOGLE_API_KEY")
+    api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        print("⚠️ GOOGLE_API_KEY environment variable not set")
-        print("💡 Set your Gemini API key: export GOOGLE_API_KEY='your-key'")
+        print("⚠️ OPENAI_API_KEY environment variable not set")
+        print("💡 Set your OpenAI API key: export OPENAI_API_KEY='your-key'")
         return
     
     # Initialize service and batch processor
@@ -301,7 +310,8 @@ async def main(video_path: Path, csv_path: Path, args):
             start_url_template=args.start_url,  # Template URL
             headless=args.headless,  # Run in headless mode for batch processing
             timeout=args.timeout,     # Timeout per execution
-            max_concurrent=args.max_concurrent  # Process workflows simultaneously
+            max_concurrent=args.max_concurrent,  # Process workflows simultaneously
+            use_shared_session=args.use_shared_session  # Use shared browser session
         )
         
         print("\n📈 Batch Results Summary:")
@@ -382,7 +392,7 @@ Examples:
   python csv_batch_execution_example.py form_fill.mp4 --max-concurrent 3 --timeout 45
 
 Requirements:
-  - Set GOOGLE_API_KEY environment variable  
+  - Set OPENAI_API_KEY environment variable  
   - Video file in supported format (MP4, AVI, MOV, MKV, WebM)
   - CSV file with data columns matching workflow placeholders
         """
@@ -427,6 +437,13 @@ Requirements:
         '--headless',
         action='store_true',
         help='Run browser in headless mode (default: True for batch processing)'
+    )
+    
+    parser.add_argument(
+        '--use-shared-session',
+        action='store_true',
+        default=True,
+        help='Use shared browser session for concurrent executions (default: True)'
     )
     
     return parser.parse_args()

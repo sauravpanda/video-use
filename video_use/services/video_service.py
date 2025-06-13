@@ -156,7 +156,8 @@ class VideoUseService:
         workflow: StructuredWorkflowOutput,
         execution_id: Optional[str] = None,
         headless: bool = False,
-        timeout: int = 30
+        timeout: int = 30,
+        use_shared_session: bool = True
     ) -> WorkflowExecutionResponse:
         """
         Execute a generated workflow using browser-use agent.
@@ -166,6 +167,7 @@ class VideoUseService:
             execution_id: Optional execution ID for tracking
             headless: Whether to run browser in headless mode
             timeout: Timeout in seconds for workflow execution
+            use_shared_session: Whether to use a shared browser session
             
         Returns:
             WorkflowExecutionResponse with execution results
@@ -180,7 +182,7 @@ class VideoUseService:
             )
         
         return await self.execution_service.execute_workflow(
-            workflow, execution_id, headless, timeout
+            workflow, execution_id, headless, timeout, use_shared_session
         )
     
     async def analyze_and_execute_workflow(
@@ -190,7 +192,8 @@ class VideoUseService:
         use_gemini: bool = True,
         gemini_api_key: Optional[str] = None,
         headless: bool = False,
-        timeout: int = 30
+        timeout: int = 30,
+        use_shared_session: bool = True
     ) -> Dict[str, Any]:
         """
         Complete pipeline: analyze video and execute the resulting workflow.
@@ -202,6 +205,7 @@ class VideoUseService:
             gemini_api_key: Optional Gemini API key
             headless: Whether to run browser in headless mode
             timeout: Timeout for workflow execution
+            use_shared_session: Whether to use a shared browser session
             
         Returns:
             Dictionary containing analysis and execution results
@@ -245,7 +249,10 @@ class VideoUseService:
         
         # Step 3: Execute workflow
         execution_result = await self.execute_workflow(
-            workflow, headless=headless, timeout=timeout
+            workflow, 
+            headless=headless, 
+            timeout=timeout,
+            use_shared_session=use_shared_session
         )
         
         return {
