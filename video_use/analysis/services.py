@@ -12,9 +12,10 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
 
 from ..models import (
-    VideoAnalysisResult, VideoAnalysisConfig, Frame, UIElement, 
+    VideoAnalysisResult, Frame, UIElement, 
     Action, WorkflowDefinition, VideoWorkflowStep, VideoMetadata
 )
+from ..config import VideoAnalysisConfig
 from ..prompts import GEMINI_VIDEO_ANALYSIS_PROMPT
 
 logger = logging.getLogger(__name__)

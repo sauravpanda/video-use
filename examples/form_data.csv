@@ -1,0 +1,6 @@
+first_name,last_name,ssn_last_4,gender,marital_status,phone_number,phone_type,address_line_1,city,state,zip_code,county,residence_type,email,confirm_email,employment_status,employer_company,monthly_income,pay_frequency,job_title
+Saurav,Panda,0000,Male,Single,9102837465,Mobile,123 Main st,San Francisco,CA,12345,SF,Rent,test@gmail.com,test@gmail.com,Self-Employed,Sauravs LLC,10000,Monthly,CEO
+John,Smith,1234,Male,Married,5551234567,Mobile,456 Oak Ave,Los Angeles,CA,90210,LA,Own,john.smith@email.com,john.smith@email.com,Employed,Tech Corp,8500,Monthly,Software Engineer
+Sarah,Johnson,5678,Female,Single,5559876543,Mobile,789 Pine St,Seattle,WA,98101,King,Rent,sarah.j@email.com,sarah.j@email.com,Employed,Design Studio,7200,Monthly,UX Designer
+Michael,Brown,9876,Male,Divorced,5554567890,Mobile,321 Elm Dr,Austin,TX,73301,Travis,Own,mike.brown@email.com,mike.brown@email.com,Self-Employed,Brown Consulting,12000,Monthly,Consultant
+Lisa,Davis,4321,Female,Married,5556789012,Mobile,654 Maple Ln,Denver,CO,80201,Denver,Rent,lisa.davis@email.com,lisa.davis@email.com,Employed,Marketing Inc,9200,Monthly,Marketing Manager 

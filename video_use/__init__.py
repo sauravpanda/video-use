@@ -2,12 +2,14 @@
 
 __version__ = "0.1.0"
 
+# Import from new modular structure
 from .models import (
-    VideoAnalysisResult, VideoAnalysisConfig, StructuredWorkflowOutput,
+    VideoAnalysisResult, StructuredWorkflowOutput,
     TokenUsage, VideoAnalysisResponse, WorkflowExecutionResponse
 )
 from .services import VideoUseService, WorkflowGenerationService, WorkflowExecutionService
 from .analysis import VideoAnalysisService, GeminiAnalysisService, FrameExtractionService
+from .config import VideoAnalysisConfig
 
 __all__ = [
     # Main services

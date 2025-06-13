@@ -142,7 +142,7 @@ async def demonstrate_individual_steps(video_path: Path):
             start_url="https://example.com"
         )
         
-        print(f"✅ Workflow generated: {workflow.prompt[:50]}...")
+        print(f"✅ Workflow generated: {workflow.prompt}\n\n-------")
         
         # Step 3: Execute workflow
         print("Step 3: Executing workflow...")

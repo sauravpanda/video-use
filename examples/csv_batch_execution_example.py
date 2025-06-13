@@ -33,7 +33,8 @@ class CSVBatchProcessor:
     async def analyze_video_for_template(
         self, 
         video_path: Path, 
-        template_start_url: str = None
+        template_start_url: str = None,
+        user_provided_url: str = None
     ) -> bool:
         """Analyze video to create workflow template."""
         try:
@@ -49,15 +50,34 @@ class CSVBatchProcessor:
                 logger.error(f"Video analysis failed: {analysis_result.error_message}")
                 return False
             
-            # Generate structured workflow template
+            # Generate structured workflow template - let Gemini extract URL first
             analysis_text = analysis_result.workflow_steps[0].get('analysis_text', '')
-            self.workflow_template = await self.service.generate_structured_workflow_from_gemini(
+            temp_workflow = await self.service.generate_structured_workflow_from_gemini(
                 analysis_text,
                 start_url=template_start_url or "https://example.com"
             )
             
+            # Priority: User provided URL > Gemini extracted URL > Default URL
+            final_url = None
+            if user_provided_url and user_provided_url != "https://example.com/login":
+                final_url = user_provided_url
+                logger.info(f"🎯 Using USER-PROVIDED URL: {final_url}")
+            elif temp_workflow.start_url and temp_workflow.start_url != "https://example.com":
+                final_url = temp_workflow.start_url
+                logger.info(f"🤖 Using GEMINI-EXTRACTED URL: {final_url}")
+            else:
+                final_url = user_provided_url or "https://example.com"
+                logger.info(f"🔗 Using DEFAULT URL: {final_url}")
+            
+            # Create final workflow template with prioritized URL
+            self.workflow_template = await self.service.generate_structured_workflow_from_gemini(
+                analysis_text,
+                start_url=final_url
+            )
+            
             logger.info("✅ Workflow template created successfully")
-            logger.info(f"Template prompt: {self.workflow_template.prompt[:100]}...")
+            logger.info(f"📝 Template prompt: {self.workflow_template.prompt[:100]}...")
+            logger.info(f"🌐 Final start URL: {self.workflow_template.start_url}")
             
             return True
             
@@ -153,6 +173,10 @@ class CSVBatchProcessor:
             async with semaphore:
                 try:
                     logger.info(f"Processing row {index + 1}/{len(csv_data)}")
+                    
+                    # Add delay to respect API rate limits
+                    if index > 0:  # No delay for first request
+                        await asyncio.sleep(2)  # 2 second delay between requests
                     
                     # Customize workflow for this row
                     customized_workflow = self.customize_workflow_for_row(
@@ -251,9 +275,11 @@ async def main(video_path: Path, csv_path: Path, args):
     
     try:
         print("\n📹 Step 1: Analyzing video for workflow template...")
+        print(f"🌐 Start URL provided: {args.start_url}")
         success = await batch_processor.analyze_video_for_template(
             video_path,
-            template_start_url=args.start_url  # Can use placeholders like https://{domain}/login
+            template_start_url=args.start_url,  # Can use placeholders like https://{domain}/login
+            user_provided_url=args.start_url    # User-provided URL gets priority
         )
         
         if not success:
@@ -380,14 +406,14 @@ Requirements:
         '--start-url',
         type=str,
         default='https://example.com/login',
-        help='Template start URL for workflows (default: https://example.com/login)'
+        help='Start URL for workflows (PRIORITY: User provided > Gemini extracted > Default). Default: https://example.com/login'
     )
     
     parser.add_argument(
         '--max-concurrent',
         type=int,
         default=2,
-        help='Maximum concurrent workflow executions (default: 2)'
+        help='Maximum concurrent workflow executions (default: 1)'
     )
     
     parser.add_argument(

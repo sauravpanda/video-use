@@ -6,7 +6,7 @@ You are an expert at analyzing user interactions from video analysis and convert
 
 Your task is to take a list of detected actions and convert them into a structured format with:
 1. A clear, step-by-step prompt that describes the workflow
-2. The starting URL for the workflow 
+2. The starting URL for the workflow. Make sure it has the full URL with the domain and correct path.
 3. Parameters containing any data values used in the workflow
 
 Focus on creating actionable instructions that could be used to automate the workflow.
@@ -27,10 +27,15 @@ Your task is to take a detailed video analysis and convert it into a structured 
 Focus on creating actionable automation instructions that could be executed by a browser automation tool.
 Extract any specific data mentioned (usernames, passwords, form values, URLs, button text, etc.) as parameters.
 
+CRITICAL URL HANDLING:
+- If a specific starting URL is provided in the prompt, use it EXACTLY as given
+- Do NOT infer or change a provided starting URL
+- Only extract URLs from the video analysis if no specific URL is provided
+- The starting URL must be the full URL with domain and correct path
+
 Guidelines:
 - Convert descriptive text into imperative automation steps
 - Extract all specific values (text inputs, selections, URLs) as parameters
-- Infer the starting URL from navigation actions mentioned
 - Make steps specific and actionable for automation
 
 {format_instructions}
@@ -65,7 +70,7 @@ Please analyze this video and provide a comprehensive step-by-step guide of what
 5. **Usability Observations**: Any UX issues or smooth interactions
 
 **Output Format:**
-- Start url as shown in the video
+- Start url as shown in the video. Make sure it has the full URL with the domain and correct path.
 - Numbered steps with timestamps when possible
 - Specific element descriptions (buttons, forms, menus)
 - User intent and goal achievement
